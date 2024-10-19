@@ -27,6 +27,12 @@ def create_cbz_from_nested_folder(input_folder, output_folder, log_queue):
         subfolder_path = os.path.join(input_folder, subfolder)
 
         if os.path.isdir(subfolder_path):
+            # Check if CBZ file already exists
+            cbz_filename = os.path.join(output_folder, f"{subfolder}.cbz")
+            if os.path.exists(cbz_filename):
+                log_queue.put(f"CBZ file already exists for '{subfolder}', skipping conversion.\n")
+                continue
+
             image_files = sorted([f for f in os.listdir(subfolder_path) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))])
 
             if not image_files:
@@ -39,7 +45,6 @@ def create_cbz_from_nested_folder(input_folder, output_folder, log_queue):
             log_queue.put(f"First image: {first_image}\n")
             log_queue.put(f"Last image: {last_image}\n")
 
-            cbz_filename = os.path.join(output_folder, f"{subfolder}.cbz")
             try:
                 # Try creating the CBZ file
                 with zipfile.ZipFile(cbz_filename, 'w') as cbz:
@@ -53,6 +58,10 @@ def create_cbz_from_nested_folder(input_folder, output_folder, log_queue):
                 # Retry with sanitized folder name
                 safe_folder_name = sanitize_folder_name(subfolder)
                 safe_cbz_filename = os.path.join(output_folder, f"{safe_folder_name}.cbz")
+
+                if os.path.exists(safe_cbz_filename):
+                    log_queue.put(f"Sanitized CBZ file already exists for '{safe_folder_name}', skipping conversion.\n")
+                    continue
 
                 try:
                     with zipfile.ZipFile(safe_cbz_filename, 'w') as cbz:
