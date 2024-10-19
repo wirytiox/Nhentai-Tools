@@ -1,0 +1,123 @@
+/* General body styling */
+body {
+  font-family: Arial, sans-serif;
+  margin: 15px;
+  width: auto; /* Adjusts width based on content */
+  height: auto; /* Adjusts height based on content */
+  overflow: auto; /* Allows scrolling if content overflows */
+  max-width: 300px; /* Adjust as needed to fit your design */
+}
+
+/* Slider container styling */
+.slider-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between; /* Space between the text and the slider */
+  margin-bottom: 10px; /* Adds space between each slider-container */
+  width: 100%; /* Ensure the container takes full width */
+  white-space: nowrap; /* Prevents text from wrapping to the next line */
+}
+
+/* Slider message styling */
+.slider-message {
+  margin-right: 10px; /* Space between the message and the slider */
+  flex: 1; /* Ensures the text takes available space */
+  text-align: left; /* Aligns the text to the left */
+}
+
+/* Switch and slider styling */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 50px; /* Slider width */
+  height: 24px; /* Slider height */
+}
+
+/* Hide the default checkbox */
+.switch input {
+  display: none;
+}
+
+/* Slider background */
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 50px; /* Matches the parent width */
+  background-color: #ccc;
+  border-radius: 24px; /* Round slider */
+  transition: background-color 0.4s;
+}
+
+/* Slider handle */
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 20px; /* Matches the slider height */
+  width: 20px; /* Matches the slider width */
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.4s;
+}
+
+/* Slider active state */
+input:checked + .slider {
+  background-color: #4CAF50;
+}
+
+input:checked + .slider:before {
+  transform: translateX(26px); /* Moves the switch */
+}
+
+/* Focus state for accessibility */
+.switch input:focus + .slider {
+  box-shadow: 0 0 1px #4CAF50;
+}
+
+/* Additional styles for buttons (if applicable) */
+.run-button {
+  background-color: #4CAF50;
+  border: none;
+  color: white;
+  padding: 12px 24px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 16px;
+  margin-top: 20px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.run-button:hover {
+  background-color: #45a049;
+}
+
+/* Focus state for buttons for accessibility */
+.run-button:focus {
+  outline: 2px solid #4CAF50;
+}
+/* Input box styling */
+.input-container {
+  margin-bottom: 10px;
+}
+
+.input-container label {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 5px;
+}
+
+.input-container input {
+  width: 100%;
+  padding: 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
