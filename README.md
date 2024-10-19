@@ -1,0 +1,1 @@
+nhentai2CBZ is a simple utility that converts downloaded manga folders from nhentai into CBZ archives. These CBZ files are ideal for reading on e-readers or organizing and serving through media servers like Jellyfin.
