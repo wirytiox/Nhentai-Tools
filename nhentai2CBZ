@@ -1,0 +1,50 @@
+import os
+import zipfile
+
+def create_cbz_from_nested_folder(input_folder, output_folder):
+    # Ensure the input folder exists
+    if not os.path.exists(input_folder):
+        print("Input folder does not exist.")
+        return
+    
+    # Ensure the output folder exists, if not create it
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    # Traverse one folder deep inside the input folder
+    for subfolder in os.listdir(input_folder):
+        subfolder_path = os.path.join(input_folder, subfolder)
+
+        # Check if it's a directory
+        if os.path.isdir(subfolder_path):
+            # List and sort images in the subfolder (assuming images are named with leading numbers)
+            image_files = sorted([f for f in os.listdir(subfolder_path) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))])
+
+            if not image_files:
+                print(f"No images found in the folder: {subfolder}")
+                continue
+            
+            # Find the first and last image (min and max)
+            first_image = image_files[0]
+            last_image = image_files[-1]
+
+            # Display the first and last image found
+            print(f"Processing '{subfolder}'")
+            print(f"First image: {first_image}")
+            print(f"Last image: {last_image}")
+
+            # Create a CBZ file (zip file with .cbz extension)
+            cbz_filename = os.path.join(output_folder, f"{subfolder}.cbz")
+            with zipfile.ZipFile(cbz_filename, 'w') as cbz:
+                for image in image_files:
+                    image_path = os.path.join(subfolder_path, image)
+                    # Add the image to the zip, using just the image's filename
+                    cbz.write(image_path, arcname=image)
+
+            print(f"CBZ file created: {cbz_filename}")
+
+# Example usage with the specified paths:
+input_folder = r"D:\hope it doesn't shit itself"  # Path with subfolders containing images
+output_folder = r"D:\mangaCBZ"                   # Path where CBZ will be saved
+
+create_cbz_from_nested_folder(input_folder, output_folder)
