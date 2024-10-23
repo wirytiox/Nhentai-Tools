@@ -1,20 +1,24 @@
 import os
-import zipfile
+import xml.etree.ElementTree as ET
+import shutil
+import re
 import tkinter as tk
 from tkinter import filedialog, messagebox
-import re
-import sys
 import threading
 import queue
+import zipfile
 
-# Function to shorten or sanitize folder names if needed
-def sanitize_folder_name(folder_name):
-    # Remove special characters (except spaces and alphanumeric) and limit length to 200 chars
-    sanitized_name = re.sub(r'[^a-zA-Z0-9 \-_]', '', folder_name)
-    return sanitized_name[:200]
+# Function to extract author and clean title from folder name
+def extract_author_and_clean_title(folder_name):
+    match = re.match(r'^[\[\(](.*?)[\]\)] ?(.*)', folder_name)
+    if match:
+        author = match.group(1).strip()  # Extract author or group
+        title = match.group(2).strip()   # Extract the rest (title)
+        return author, title
+    return None, folder_name  # No match found, return folder name as title
 
-# Function to create the CBZ file from nested folders
-def create_cbz_from_nested_folder(input_folder, output_folder, log_queue):
+# Function to process manga folders, generate XML, and create CBZ files
+def process_manga(input_folder, output_folder, log_queue):
     if not os.path.exists(input_folder):
         log_queue.put("Input folder does not exist.\n")
         return
@@ -22,66 +26,90 @@ def create_cbz_from_nested_folder(input_folder, output_folder, log_queue):
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
-    # Traverse one folder deep inside the input folder
-    for subfolder in os.listdir(input_folder):
-        subfolder_path = os.path.join(input_folder, subfolder)
+    image_extensions = ('.png', '.jpg', '.jpeg', '.webp', '.gif')
+    file_name_variations = ['1', '01', '001', '0001']
 
-        if os.path.isdir(subfolder_path):
-            # Check if CBZ file already exists
-            cbz_filename = os.path.join(output_folder, f"{subfolder}.cbz")
-            if os.path.exists(cbz_filename):
-                log_queue.put(f"CBZ file already exists for '{subfolder}', skipping conversion.\n")
-                continue
+    directories = [d for d in os.listdir(input_folder) if os.path.isdir(os.path.join(input_folder, d))]
 
-            image_files = sorted([f for f in os.listdir(subfolder_path) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))])
+    log_queue.put(f"Processing {len(directories)} directories...\n")
 
-            if not image_files:
-                log_queue.put(f"No images found in the folder: {subfolder}\n")
-                continue
+    for directory in directories:
+        new_dir_path = os.path.join(output_folder, directory)
 
-            first_image = image_files[0]
-            last_image = image_files[-1]
-            log_queue.put(f"Processing '{subfolder}'\n")
-            log_queue.put(f"First image: {first_image}\n")
-            log_queue.put(f"Last image: {last_image}\n")
+        # Create output directory if it doesn't exist
+        if not os.path.exists(new_dir_path):
+            os.mkdir(new_dir_path)
+            log_queue.put(f"Created directory: {new_dir_path}\n")
 
+        # Extract author and title from folder name
+        author, cleaned_title = extract_author_and_clean_title(directory)
+
+        # Generate ComicInfo.xml
+        comic_info = ET.Element("ComicInfo")
+        title_element = ET.SubElement(comic_info, "Title")
+        title_element.text = cleaned_title
+
+        if author:
+            author_element = ET.SubElement(comic_info, "Author")
+            author_element.text = author
+            log_queue.put(f"Extracted author: {author}\n")
+
+        # Save ComicInfo.xml (OUTSIDE CBZ)
+        comic_info_path = os.path.join(new_dir_path, "ComicInfo.xml")
+        tree = ET.ElementTree(comic_info)
+        with open(comic_info_path, "wb") as file:
+            tree.write(file, encoding="utf-8", xml_declaration=True)
+            log_queue.put(f"Written ComicInfo.xml for {cleaned_title} outside CBZ\n")
+
+        # Search for the image file named 1, 01, 001, 0001 with any valid extension
+        source_dir = os.path.join(input_folder, directory)
+        found = False
+        image_files = []
+
+        for filename_base in file_name_variations:
+            for ext in image_extensions:
+                image_file = os.path.join(source_dir, f"{filename_base}{ext}")
+                if os.path.exists(image_file):
+                    new_file_name = f"cover{ext}"
+                    new_file_path = os.path.join(new_dir_path, new_file_name)
+                    shutil.copy(image_file, new_file_path)
+                    log_queue.put(f"Copied and renamed {image_file} to {new_file_path} (outside CBZ)\n")
+                    found = True
+                    break
+            if found:
+                break
+
+        # Collect all image files for CBZ creation (excluding ComicInfo.xml and cover)
+        image_files = [f for f in os.listdir(source_dir) if f.lower().endswith(image_extensions)]
+        image_files.sort()  # Sort image files to maintain correct order in CBZ
+
+        if image_files:
+            # Create the CBZ file (inside the new directory)
+            cbz_filename = os.path.join(new_dir_path, f"{cleaned_title}.cbz")
+            log_queue.put(f"Creating CBZ for {cleaned_title}...\n")
             try:
-                # Try creating the CBZ file
                 with zipfile.ZipFile(cbz_filename, 'w') as cbz:
-                    for image in image_files:
-                        image_path = os.path.join(subfolder_path, image)
-                        cbz.write(image_path, arcname=image)
+                    # Add all other images (excluding ComicInfo.xml and cover)
+                    for image_file in image_files:
+                        image_path = os.path.join(source_dir, image_file)
+                        cbz.write(image_path, arcname=image_file)
+                    log_queue.put(f"CBZ file created: {cbz_filename}\n")
 
-                log_queue.put(f"CBZ file created: {cbz_filename}\n")
             except Exception as e:
-                log_queue.put(f"Error saving CBZ file: {e}\n")
-                # Retry with sanitized folder name
-                safe_folder_name = sanitize_folder_name(subfolder)
-                safe_cbz_filename = os.path.join(output_folder, f"{safe_folder_name}.cbz")
+                log_queue.put(f"Error creating CBZ file: {e}\n")
+        else:
+            log_queue.put(f"No image files found in {directory}\n")
 
-                if os.path.exists(safe_cbz_filename):
-                    log_queue.put(f"Sanitized CBZ file already exists for '{safe_folder_name}', skipping conversion.\n")
-                    continue
+    log_queue.put("Processing completed.\n")
 
-                try:
-                    with zipfile.ZipFile(safe_cbz_filename, 'w') as cbz:
-                        for image in image_files:
-                            image_path = os.path.join(subfolder_path, image)
-                            cbz.write(image_path, arcname=image)
-                    log_queue.put(f"CBZ file created: {safe_cbz_filename}\n")
-                except Exception as e2:
-                    log_queue.put(f"Failed again with sanitized folder name: {e2}\n")
-
-    log_queue.put("CBZ files have been created successfully!\n")
-
-# Function to open a folder dialog and return the selected path
+# Function to select a folder
 def select_folder(var):
     folder_selected = filedialog.askdirectory()
     if folder_selected:
         var.set(folder_selected)
 
-# Function to start the conversion process (running in a separate thread)
-def start_conversion_thread(input_var, output_var, log_queue):
+# Function to start the processing in a separate thread
+def start_processing_thread(input_var, output_var, log_queue):
     input_folder = input_var.get()
     output_folder = output_var.get()
 
@@ -89,8 +117,8 @@ def start_conversion_thread(input_var, output_var, log_queue):
         messagebox.showerror("Error", "Please select both input and output directories.")
         return
 
-    log_queue.put("Starting conversion...\n")
-    create_cbz_from_nested_folder(input_folder, output_folder, log_queue)
+    log_queue.put("Starting processing...\n")
+    threading.Thread(target=process_manga, args=(input_folder, output_folder, log_queue)).start()
 
 # Function to display logs in the text widget
 def display_logs(log_queue, log_text):
@@ -102,17 +130,17 @@ def display_logs(log_queue, log_text):
     # Call this function again after 100 ms to check for new logs
     log_text.after(100, display_logs, log_queue, log_text)
 
-# Main function to create the GUI
+# Function to create the GUI
 def create_gui():
     root = tk.Tk()
-    root.title("Manga to CBZ Converter")
-    root.geometry("700x400")  # Make the window resizable
+    root.title("Manga Processor")
+    root.geometry("700x400")  # Set the window size
 
     # Variables to store folder paths
     input_var = tk.StringVar()
     output_var = tk.StringVar()
 
-    # Create a queue for log messages
+    # Queue for log messages
     log_queue = queue.Queue()
 
     # Input folder selection
@@ -126,7 +154,7 @@ def create_gui():
     tk.Button(root, text="Browse", command=lambda: select_folder(output_var)).grid(row=1, column=2, padx=10, pady=5)
 
     # Start button
-    tk.Button(root, text="Start Conversion", command=lambda: threading.Thread(target=start_conversion_thread, args=(input_var, output_var, log_queue)).start()).grid(row=2, column=0, columnspan=3, padx=10, pady=10)
+    tk.Button(root, text="Start Processing", command=lambda: start_processing_thread(input_var, output_var, log_queue)).grid(row=2, column=0, columnspan=3, padx=10, pady=10)
 
     # Text widget to show logs
     log_text = tk.Text(root, height=15, width=80)
