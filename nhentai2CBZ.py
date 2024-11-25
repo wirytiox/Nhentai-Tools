@@ -35,37 +35,45 @@ def process_manga(input_folder, output_folder, log_queue):
 
     for directory in directories:
         new_dir_path = os.path.join(output_folder, directory)
-
+        
+        # Extract author and title from folder name
+        author, cleaned_title = extract_author_and_clean_title(directory)
+    
+        # CBZ file path
+        cbz_filename = os.path.join(new_dir_path, f"{cleaned_title}.cbz")
+    
+        # Skip processing if CBZ already exists
+        if os.path.exists(cbz_filename):
+            log_queue.put(f"Skipping {directory}: CBZ file already exists ({cbz_filename}).\n")
+            continue
+        
         # Create output directory if it doesn't exist
         if not os.path.exists(new_dir_path):
             os.mkdir(new_dir_path)
             log_queue.put(f"Created directory: {new_dir_path}\n")
-
-        # Extract author and title from folder name
-        author, cleaned_title = extract_author_and_clean_title(directory)
-
+    
         # Generate ComicInfo.xml
         comic_info = ET.Element("ComicInfo")
         title_element = ET.SubElement(comic_info, "Title")
         title_element.text = cleaned_title
-
+    
         if author:
             author_element = ET.SubElement(comic_info, "Author")
             author_element.text = author
             log_queue.put(f"Extracted author: {author}\n")
-
+    
         # Save ComicInfo.xml (OUTSIDE CBZ)
         comic_info_path = os.path.join(new_dir_path, "ComicInfo.xml")
         tree = ET.ElementTree(comic_info)
         with open(comic_info_path, "wb") as file:
             tree.write(file, encoding="utf-8", xml_declaration=True)
             log_queue.put(f"Written ComicInfo.xml for {cleaned_title} outside CBZ\n")
-
+    
         # Search for the image file named 1, 01, 001, 0001 with any valid extension
         source_dir = os.path.join(input_folder, directory)
         found = False
         image_files = []
-
+    
         for filename_base in file_name_variations:
             for ext in image_extensions:
                 image_file = os.path.join(source_dir, f"{filename_base}{ext}")
@@ -78,14 +86,13 @@ def process_manga(input_folder, output_folder, log_queue):
                     break
             if found:
                 break
-
+            
         # Collect all image files for CBZ creation (excluding ComicInfo.xml and cover)
         image_files = [f for f in os.listdir(source_dir) if f.lower().endswith(image_extensions)]
         image_files.sort()  # Sort image files to maintain correct order in CBZ
-
+    
         if image_files:
             # Create the CBZ file (inside the new directory)
-            cbz_filename = os.path.join(new_dir_path, f"{cleaned_title}.cbz")
             log_queue.put(f"Creating CBZ for {cleaned_title}...\n")
             try:
                 with zipfile.ZipFile(cbz_filename, 'w') as cbz:
@@ -94,13 +101,12 @@ def process_manga(input_folder, output_folder, log_queue):
                         image_path = os.path.join(source_dir, image_file)
                         cbz.write(image_path, arcname=image_file)
                     log_queue.put(f"CBZ file created: {cbz_filename}\n")
-
+    
             except Exception as e:
                 log_queue.put(f"Error creating CBZ file: {e}\n")
         else:
             log_queue.put(f"No image files found in {directory}\n")
 
-    log_queue.put("Processing completed.\n")
 
 # Function to select a folder
 def select_folder(var):
